@@ -1,12 +1,12 @@
 #!/bin/bash
+
 #----------------------------------------------------
-#      File-name: <-/bin/hello.sh>
+#      File-name: <-/bin/init.sh>
 #       Language: bash script
-#       Synopsis: Hello World
-#    Description: My first bash program
+#       Synopsis: initialize repository
+#    Description: Recursive chmod to make all .sh files within the repository executable 
 #        Project: Shell Script Programming Course
 #         Author: hartmannka80488@th-nuernberg.de
 #----------------------------------------------------
 
-echo "Hello World!"     
-exit 0
+find ./bin/ -type f -iname "*.sh" -exec chmod a+x {} \;
