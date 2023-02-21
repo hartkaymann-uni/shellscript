@@ -21,7 +21,7 @@ function set_interval()
 }
 
 # Clear debug file
-true > debug.txt
+# true > debug.txt
 
 # Script parameters
 version=0.0.1
