@@ -100,7 +100,6 @@ function calc() { awk "BEGIN{ printf \"%.4f\n\", $* }"; }
 # @param: value min1 max1 min2 max2
 function map
 {
-  #{ echo "map"; echo "val: $1"; echo "min1: $2"; echo "max1: $3"; echo "min2: $4"; echo "max2: $5"; } >> debug.txt
   v=$(calc "($4+($1-$2)*($5-$4)/($3-$2))")
   echo "$v"
   return 0
@@ -127,60 +126,65 @@ function draw_value_box()
 }
 
 # Draw axes with specified size, dimensions and axis names 
-# @param:  dim_x dim_y 
+# @param:  origin_x origin_y dim_x dim_y 
 function draw_stock()
 {
-  # Axis origin
-  xo=5
-  yo=$((h-5))
-
   # X-Axis
-  tput cup $yo $xo
-  repeat "$1" "_"
+  tput bold
+  tput cup "$2" "$1"
+  repeat "$3" "_"
+  tput sgr0  
 
   # Y-Axis
-  repeat_vertical $((yo-$2)) $xo "$2" "|" 
+  tput bold
+  repeat_vertical $(($2-$4)) "$1" "$4" "|" 
+  tput sgr0  
 
-  # X-Labels
-  time_first=${timestamp[1]}
-  time_last=${timestamp[-1]}
-  
+  # X-Labels  
+  timestamp_length=5
+  for (( i=$(($1+1)); i<=$(($1+$3-timestamp_length)); i+="$timestamp_length" )); do
+    idx=$(map "$i" "$1" $(($1+$3)) $((${#timestamp[@]}-1)) 1 | cut -d, -f1)
+    tput cup $(($2+1)) $((i))
+    printf "\u2319%s" "${timestamp[idx]:11:5}"
+    i=$((i+timestamp_length))
+  done
+
+
+
   # Y-Labels
   ymin=$(("${minmin%\.*}"))
   ymax=$(("${maxmax%\.*}+1"))
 
   for (( i="$ymin"; i<="$ymax"; i++ )); do
-    posy=$(map "$i" "$ymin" "$ymax" $yo $(( yo - $2 )) | cut -d, -f1)
-    tput cup "$posy" $((xo-(${#i}+1)))
-    printf "%s-" "$i"
+    posy=$(map "$i" "$ymin" "$ymax" "$2" $(($2-$4)) | cut -d, -f1)
+    tput cup "$posy" $(($1-(${#i}+1)))
+    printf "%s\u2015" "$i"
   done
 
 
   # Figure out color of graph
   color=2 # Green
-  echo "$first_close $last_close" >> debug.txt
   if (( $(echo "$first_close > $last_close" | bc -l) )); then
     color=1 # Red
   fi
   tput setab $color
 
   # Figure out positions and draw 
-  for ((i=1; i<=$1; i++)); do
+  for ((i=1; i<$3; i++)); do
     # Index to look up value
-    idx=$(map $i "$1" 1 $(( ${#timestamp[@]} - 1 )) 1 | cut -d, -f1)
+    idx=$(map $i "$3" 1 $(( ${#timestamp[@]} - 1 )) 1 | cut -d, -f1)
     val=${close[$idx]}
 
     # Y-Position of value in coordinate system
-    posy=$(map "$val" "$ymin" "$ymax" $((yo)) $(( yo-$2)) | cut -d, -f1)
+    posy=$(map "$val" "$ymin" "$ymax" "$2" $(($2-$4)) | cut -d, -f1)
 
     tput setab $color
-    tput cup $((yo-posy)) $((xo+i))
-    printf "%s" "*"
-    tput sgr0
-
-    repeat_vertical $((yo-posy+1)) $((xo+i)) $((posy-2)) "*" 
+    tput cup $(($2-posy)) $(($1+i))
+    printf "%s" " "
+    tput setab 7
+    repeat_vertical $(($2-posy+1)) $(($1+i)) $((posy-2)) " " 
   done
-  tput setab 0
+  tput sgr0  
 
   return 0
 }
@@ -212,7 +216,6 @@ function exit_loop()
 # Screen dimensions
 w=$(tput cols)
 h=$(tput lines)
-qw=$((w/4))
 qh=$((h/4))
 
 # Get stock data from Alpha Vantage API and save to csv
@@ -250,7 +253,12 @@ if [[ $draw == 1 ]]; then
   draw_value_box $((w-15)) $((qh)) Low "$minmin"
   draw_value_box $((w-15)) $((qh*2)) High "$maxmax"
   draw_value_box $((w-15)) $((qh*3)) Close "$last_close"
-  draw_stock "$((qw*3))" "$((qh*3))" 
+  
+  graph_x=5
+  graph_y=$((h-5))
+  graph_w=$((w-graph_x-14-5))
+  graph_h=$((h-5-1))
+  draw_stock $graph_x $graph_y $graph_w $graph_h
 
   # Start the exit loop
   exit_loop q
