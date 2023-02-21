@@ -15,6 +15,7 @@ function set_interval()
   if [[ " ${arr[*]} " =~ " ${1} " ]]; then
     interval="${1}min"
   else
+    echo "Invalid interval. Must be 1, 5, 15, 30, 45 or 60."
     exit 0;
   fi
 }
@@ -28,16 +29,17 @@ draw=1
 
 # API parameters
 func=TIME_SERIES_INTRADAY
-interval=1min
+interval=15min
 apikey=AV6H9H7PL4L284AY
 datatype=csv
 
 while [[ "${1-}" =~ ^- ]]; do
   case "$1" in
-    -V | --version )  echo "Version $version" ; exit 0 ;;
+    -v | --version )  echo "version $version" ; exit 0 ;;
     -s | --symbol ) shift ; symbol=$1 ;; 
     -i | --interval ) shift ; set_interval "$1" ;;
     -b | --brief ) draw=0 ;;
+    -h | --help ) cat stonks_man.txt ; echo ; exit 0 ;;
     --) shift ; break ;;
     *)  echo "Invalid option '$1'" >&2 ; exit 1 ;;
   esac
@@ -45,8 +47,8 @@ while [[ "${1-}" =~ ^- ]]; do
 done
 
 if [ -z "$symbol" ]; then
-        echo 'Missing -s' >&2
-        exit 1
+  echo 'Missing -s' >&2
+  exit 1
 fi
 
 # Find max number in array
@@ -84,7 +86,7 @@ repeat()
 function repeat_vertical() 
 {
   for ((yshift=0; yshift<=$3; yshift++)); do 
-    tput cup $(($1-yshift)) "$2"
+    tput cup $(($1+yshift)) "$2"
     printf "%s" "$4"
   done
   return 0
@@ -137,7 +139,7 @@ function draw_stock()
   repeat "$1" "_"
 
   # Y-Axis
-  repeat_vertical $yo $xo "$2" "|" 
+  repeat_vertical $((yo-$2)) $xo "$2" "|" 
 
   # X-Labels
   time_first=${timestamp[1]}
@@ -149,24 +151,36 @@ function draw_stock()
 
   for (( i="$ymin"; i<="$ymax"; i++ )); do
     posy=$(map "$i" "$ymin" "$ymax" $yo $(( yo - $2 )) | cut -d, -f1)
-    xds=$((xo-${#i}))
     tput cup "$posy" $((xo-(${#i}+1)))
     printf "%s-" "$i"
-    { echo "I: $i PY: $posy PX: $xds"; } >> debug.txt
   done
 
+
+  # Figure out color of graph
+  color=2 # Green
+  echo "$first_close $last_close" >> debug.txt
+  if (( $(echo "$first_close > $last_close" | bc -l) )); then
+    color=1 # Red
+  fi
+  tput setab $color
 
   # Figure out positions and draw 
   for ((i=1; i<=$1; i++)); do
     # Index to look up value
-    idx=$(map $i "$1" 1 1 $(( ${#timestamp[@]} - 1 )) | cut -d, -f1)
+    idx=$(map $i "$1" 1 $(( ${#timestamp[@]} - 1 )) 1 | cut -d, -f1)
     val=${close[$idx]}
 
     # Y-Position of value in coordinate system
-    posy=$(map "$val" "$ymin" "$ymax" $yo $(( yo - $2 )) | cut -d, -f1)
+    posy=$(map "$val" "$ymin" "$ymax" $((yo)) $(( yo-$2)) | cut -d, -f1)
 
-    repeat_vertical $((yo-1)) $((xo+i)) $((yo-posy)) "*" 
+    tput setab $color
+    tput cup $((yo-posy)) $((xo+i))
+    printf "%s" "*"
+    tput sgr0
+
+    repeat_vertical $((yo-posy+1)) $((xo+i)) $((posy-2)) "*" 
   done
+  tput setab 0
 
   return 0
 }
@@ -215,28 +229,38 @@ while IFS=',' read -ra arr; do
    volume+=("${arr[5]}")
 done < stock.csv
 
-# Save & clear screen
-tput smcup
-tput cup 0 0
-tput ed
+if [[ ${timestamp[1]} == *Error* ]]; then
+  printf "%s\n" "Error, invalid symbol: $symbol. Exiting."
+  exit 1
+fi
 
 # Print absolute values on right
 maxmax=$(max "${high[@]:1}")
 minmin=$(min "${low[@]:1}")
+first_close=${close[-1]}
+last_close=${close[1]}
 
 if [[ $draw == 1 ]]; then
+  # Save & clear screen
+  tput smcup
+  tput cup 0 0
+  tput ed
+
+  draw_value_box $((w-15)) 0 Open "$first_close"
   draw_value_box $((w-15)) $((qh)) Low "$minmin"
   draw_value_box $((w-15)) $((qh*2)) High "$maxmax"
-  draw_value_box $((w-15)) $((qh*3)) Close "${close[1]}"
+  draw_value_box $((w-15)) $((qh*3)) Close "$last_close"
   draw_stock "$((qw*3))" "$((qh*3))" 
+
+  # Start the exit loop
+  exit_loop q
+
+  # Restore screen
+  tput rmcup
+
 else 
+  printf "Start: %s\n" "$first_close"
   printf "Low: %s\n" "$minmin"
   printf "Hight: %s\n" "$maxmax"
-  printf "Close: %s\n" "${close[1]}"
+  printf "Close: %s\n" "$last_close"
 fi
-
-# Start the exit loop
-exit_loop q
-
-# Restore screen
-tput rmcup

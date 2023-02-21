@@ -1,0 +1,24 @@
+NAME
+    stonks - display stock data in terminal
+SYNOPSIS
+    stonks [OPTIONS] 
+DESCRIPTION
+    Display data of specified stock. Currently always 100 datapoints are accessed.
+    
+    -v, --version
+        display script version
+    
+    -s, --symbol 
+        MANDATORY specify stock for which data should be display
+        List of symbols that (should) work, can be found at "https://stockanalysis.com/stocks/"
+
+    -i, --interval
+        set the interval between datapoints in minutes
+        available options are 1, 5, 15, 30, 45, 60
+        default is 15
+
+    -b, --brief
+        only print key values, don't display graphical representation
+
+    -h, --help 
+        print this manpage in the terminal
